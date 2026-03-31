@@ -9,6 +9,26 @@ from agents.scenario_agent import run_scenario_agent
 
 st.set_page_config(page_title="Supply Chain Disruption Manager", layout="wide")
 
+# --- GLOBAL STYLING ---
+st.markdown("""
+<style>
+.block-container { padding-top: 2rem; padding-bottom: 2rem; }
+h2 { margin-top: 1.5rem; }
+[data-testid="stMetric"] {
+    background-color: #111827;
+    padding: 15px;
+    border-radius: 10px;
+}
+div[data-testid="stMarkdownContainer"] p { margin-bottom: 0.5rem; }
+
+/* Clean divider line */
+.section-divider {
+    border-top: 1px solid #e5e7eb;
+    margin: 20px 0;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("Supply Chain Disruption Manager")
 
 # --- SIDEBAR ---
@@ -34,7 +54,7 @@ event = st.text_input(
     value="Typhoon near Shanghai port causing shipment delays"
 )
 
-# --- HELPER: CLEAN + PARSE JSON ---
+# --- HELPER ---
 def safe_parse(text):
     try:
         cleaned = re.sub(r"```json|```", "", text).strip()
@@ -45,38 +65,39 @@ def safe_parse(text):
 # --- RUN PIPELINE ---
 if st.button("Run Simulation"):
     if event:
-        try:
-            monitoring_raw = run_monitoring_agent(event)
-            monitoring = safe_parse(monitoring_raw)
+        with st.spinner("Running supply chain analysis..."):
+            try:
+                monitoring_raw = run_monitoring_agent(event)
+                monitoring = safe_parse(monitoring_raw)
 
-            if not monitoring:
-                raise ValueError("Monitoring agent returned invalid JSON")
+                if not monitoring:
+                    raise ValueError("Monitoring agent returned invalid JSON")
 
-            risk_raw = run_risk_agent(monitoring_raw)
-            risk = safe_parse(risk_raw)
+                risk_raw = run_risk_agent(monitoring_raw)
+                risk = safe_parse(risk_raw)
 
-            if not risk:
-                raise ValueError("Risk agent returned invalid JSON")
+                if not risk:
+                    raise ValueError("Risk agent returned invalid JSON")
 
-            scenario_raw = run_scenario_agent(monitoring_raw, risk_raw)
-            options = safe_parse(scenario_raw)
+                scenario_raw = run_scenario_agent(monitoring_raw, risk_raw)
+                options = safe_parse(scenario_raw)
 
-            if not isinstance(options, list):
-                raise ValueError("Scenario agent output invalid")
+                if not isinstance(options, list):
+                    raise ValueError("Scenario agent output invalid")
 
-            st.session_state["run_data"] = {
-                "monitoring": monitoring,
-                "risk": risk,
-                "options": options,
-                "raw": {
-                    "monitoring": monitoring_raw,
-                    "risk": risk_raw,
-                    "scenario": scenario_raw
+                st.session_state["run_data"] = {
+                    "monitoring": monitoring,
+                    "risk": risk,
+                    "options": options,
+                    "raw": {
+                        "monitoring": monitoring_raw,
+                        "risk": risk_raw,
+                        "scenario": scenario_raw
+                    }
                 }
-            }
 
-        except Exception as e:
-            st.error(f"Pipeline failed: {e}")
+            except Exception as e:
+                st.error(f"Pipeline failed: {e}")
 
     else:
         st.warning("Please enter an event.")
@@ -96,13 +117,11 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     delay_days = risk.get("estimated_delay_days", 0)
     risk_score = risk.get("risk_score", 0)
 
-    # --- FINANCIAL CALCS ---
     for opt in options:
         delay = opt.get("estimated_delay_days", 0)
         opt["delay_cost"] = delay * delay_cost_per_day
         opt["total_impact"] = opt.get("estimated_cost", 0) + opt["delay_cost"]
 
-    # --- DECISION LOGIC ---
     if options:
         if decision_strategy == "Minimize Cost Impact":
             best = min(options, key=lambda x: x["total_impact"])
@@ -120,10 +139,9 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
         best = None
 
     # --- EXECUTIVE SUMMARY ---
-    st.markdown("## Executive Summary")
-
     if best:
-        st.info(f"""
+        st.markdown("### Executive Summary")
+        st.markdown(f"""
 **Situation:** {disruption_type.title()} disruption with **{severity.upper()} severity**
 
 **Expected Impact:** ~{delay_days} day delay
@@ -134,46 +152,32 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 
 **Confidence Level:** {confidence.title()}
 """)
-
-    st.divider()
+        st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
     # --- KEY METRICS ---
-    st.markdown("## Key Metrics")
-
+    st.markdown("### Key Metrics")
     col1, col2, col3 = st.columns(3)
-
     col1.metric("Risk Score", risk_score, "High" if risk_score > 70 else "Moderate")
     col2.metric("Estimated Delay", f"{delay_days} days")
     col3.metric("Confidence", confidence.title())
 
-    if risk_score > 70:
-        st.error("High Risk Disruption")
-    elif risk_score > 40:
-        st.warning("Moderate Risk Disruption")
-    else:
-        st.success("Low Risk Disruption")
-
     st.markdown(f"**Time to Impact:** Immediate (within {delay_days} days)")
-
-    st.divider()
+    st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
     # --- RECOMMENDED ACTION ---
     if best:
-        st.markdown("## Recommended Action")
-
-        st.success(f"""
+        st.markdown("### Recommended Action")
+        st.markdown(f"""
 **{best.get('option_name', 'N/A')}**
 
 - Estimated Cost: ${best.get('estimated_cost', 0):,}
 - Delay: {best.get('estimated_delay_days', 0)} days
 - Total Impact: ${best.get('total_impact', 0):,}
 """)
+        st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
-    st.divider()
-
-    # --- DECISION OPTIONS (SIMPLIFIED VIEW) ---
-    st.markdown("## Decision Options")
-
+    # --- DECISION OPTIONS ---
+    st.markdown("### Decision Options")
     for i, opt in enumerate(options):
         st.markdown(f"""
 **Option {i+1}: {opt.get('option_name', 'N/A')}**
@@ -182,21 +186,18 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 - Delay: {opt.get('estimated_delay_days', 0)} days
 - Total Impact: ${opt.get('total_impact', 0):,}
 """)
-
-    st.divider()
+    st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
     # --- BUSINESS IMPACT ---
-    st.markdown("## Business Impact")
-
-    st.write(f"""
+    st.markdown("### Business Impact")
+    st.markdown(f"""
 - **Operational:** {monitoring.get('likely_impact', 'N/A')}
 - **Financial Exposure:** ~${delay_cost_per_day:,} per day of delay
 - **Customer Risk:** Potential downstream fulfillment disruption
 """)
 
-    # --- TABLE (KEPT FOR DETAIL) ---
+    # --- TABLE ---
     df = pd.DataFrame(options)
-
     if not df.empty:
         display_df = df.copy()
         display_df["estimated_cost"] = display_df["estimated_cost"].map("${:,.0f}".format)
@@ -208,14 +209,12 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 
     # --- MANUAL OVERRIDE ---
     if options:
-        st.markdown("## Manual Override")
-
+        st.markdown("### Manual Override")
         names = [o["option_name"] for o in options]
         override = st.selectbox("Override decision:", ["No Override"] + names)
 
         if override != "No Override":
             selected = next(o for o in options if o["option_name"] == override)
-
             st.warning("Override Applied")
             st.write(f"**Option:** {selected['option_name']}")
             st.write(f"**Impact:** ${selected['total_impact']:,}")

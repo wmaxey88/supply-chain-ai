@@ -65,39 +65,38 @@ def safe_parse(text):
 # --- RUN PIPELINE ---
 if st.button("Run Simulation"):
     if event:
-        with st.spinner("Running supply chain analysis..."):
-            try:
-                monitoring_raw = run_monitoring_agent(event)
-                monitoring = safe_parse(monitoring_raw)
+        try:
+            monitoring_raw = run_monitoring_agent(event)
+            monitoring = safe_parse(monitoring_raw)
 
-                if not monitoring:
-                    raise ValueError("Monitoring agent returned invalid JSON")
+            if not monitoring:
+                raise ValueError("Monitoring agent returned invalid JSON")
 
-                risk_raw = run_risk_agent(monitoring_raw)
-                risk = safe_parse(risk_raw)
+            risk_raw = run_risk_agent(monitoring_raw)
+            risk = safe_parse(risk_raw)
 
-                if not risk:
-                    raise ValueError("Risk agent returned invalid JSON")
+            if not risk:
+                raise ValueError("Risk agent returned invalid JSON")
 
-                scenario_raw = run_scenario_agent(monitoring_raw, risk_raw)
-                options = safe_parse(scenario_raw)
+            scenario_raw = run_scenario_agent(monitoring_raw, risk_raw)
+            options = safe_parse(scenario_raw)
 
-                if not isinstance(options, list):
-                    raise ValueError("Scenario agent output invalid")
+            if not isinstance(options, list):
+                raise ValueError("Scenario agent output invalid")
 
-                st.session_state["run_data"] = {
-                    "monitoring": monitoring,
-                    "risk": risk,
-                    "options": options,
-                    "raw": {
-                        "monitoring": monitoring_raw,
-                        "risk": risk_raw,
-                        "scenario": scenario_raw
-                    }
+            st.session_state["run_data"] = {
+                "monitoring": monitoring,
+                "risk": risk,
+                "options": options,
+                "raw": {
+                    "monitoring": monitoring_raw,
+                    "risk": risk_raw,
+                    "scenario": scenario_raw
                 }
+            }
 
-            except Exception as e:
-                st.error(f"Pipeline failed: {e}")
+        except Exception as e:
+            st.error(f"Pipeline failed: {e}")
 
     else:
         st.warning("Please enter an event.")
@@ -219,9 +218,23 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
             st.write(f"**Option:** {selected['option_name']}")
             st.write(f"**Impact:** ${selected['total_impact']:,}")
 
-    # --- RAW OUTPUTS ---
+        # --- RAW OUTPUTS ---
     if show_raw:
         with st.expander("View Detailed Agent Output"):
-            st.code(data["raw"]["monitoring"])
-            st.code(data["raw"]["risk"])
-            st.code(data["raw"]["scenario"])
+            try:
+                st.markdown("**Monitoring Agent Output**")
+                st.json(safe_parse(data["raw"]["monitoring"]) or data["raw"]["monitoring"])
+
+                st.markdown("**Risk Agent Output**")
+                st.json(safe_parse(data["raw"]["risk"]) or data["raw"]["risk"])
+
+                st.markdown("**Scenario Agent Output**")
+                parsed_scenario = safe_parse(data["raw"]["scenario"])
+                if isinstance(parsed_scenario, list):
+                    for i, item in enumerate(parsed_scenario):
+                        st.markdown(f"Option {i+1}")
+                        st.json(item)
+                else:
+                    st.json(parsed_scenario or data["raw"]["scenario"])
+            except Exception as e:
+                st.error(f"Error displaying raw outputs: {e}")
