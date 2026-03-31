@@ -9,6 +9,24 @@ from agents.scenario_agent import run_scenario_agent
 
 st.set_page_config(page_title="Supply Chain Disruption Manager", layout="wide")
 
+# --- GLOBAL STYLING ---
+st.markdown("""
+<style>
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+h2 {
+    margin-top: 1.5rem;
+}
+[data-testid="stMetric"] {
+    background-color: #111827;
+    padding: 15px;
+    border-radius: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("Supply Chain Disruption Manager")
 
 # --- SIDEBAR ---
@@ -123,17 +141,19 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     st.markdown("## Executive Summary")
 
     if best:
-        st.info(f"""
-**Situation:** {disruption_type.title()} disruption with **{severity.upper()} severity**
+        st.markdown("<div style='padding:20px;border-radius:12px;background-color:#1f2937;'>", unsafe_allow_html=True)
+        st.markdown(f"""
+**Situation:** {disruption_type.title()} disruption with **{severity.upper()} severity**  
 
-**Expected Impact:** ~{delay_days} day delay
+**Expected Impact:** ~{delay_days} day delay  
 
-**Recommended Action:** {best.get('option_name', 'N/A')}
+**Recommended Action:** {best.get('option_name', 'N/A')}  
 
-**Estimated Impact:** ${best.get('total_impact', 0):,}
+**Estimated Impact:** ${best.get('total_impact', 0):,}  
 
 **Confidence Level:** {confidence.title()}
 """)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
 
@@ -161,27 +181,31 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     if best:
         st.markdown("## Recommended Action")
 
-        st.success(f"""
-**{best.get('option_name', 'N/A')}**
+        st.markdown("<div style='padding:18px;border-radius:12px;background-color:#052e16;'>", unsafe_allow_html=True)
+        st.markdown(f"""
+**{best.get('option_name', 'N/A')}**  
 
-- Estimated Cost: ${best.get('estimated_cost', 0):,}
-- Delay: {best.get('estimated_delay_days', 0)} days
+- Estimated Cost: ${best.get('estimated_cost', 0):,}  
+- Delay: {best.get('estimated_delay_days', 0)} days  
 - Total Impact: ${best.get('total_impact', 0):,}
 """)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
 
-    # --- DECISION OPTIONS (SIMPLIFIED VIEW) ---
+    # --- DECISION OPTIONS ---
     st.markdown("## Decision Options")
 
     for i, opt in enumerate(options):
+        st.markdown("<div style='padding:15px;border-radius:10px;background-color:#111827;margin-bottom:10px;'>", unsafe_allow_html=True)
         st.markdown(f"""
-**Option {i+1}: {opt.get('option_name', 'N/A')}**
+**Option {i+1}: {opt.get('option_name', 'N/A')}**  
 
-- Cost: ${opt.get('estimated_cost', 0):,}
-- Delay: {opt.get('estimated_delay_days', 0)} days
+- Cost: ${opt.get('estimated_cost', 0):,}  
+- Delay: {opt.get('estimated_delay_days', 0)} days  
 - Total Impact: ${opt.get('total_impact', 0):,}
 """)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
 
@@ -194,7 +218,7 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 - **Customer Risk:** Potential downstream fulfillment disruption
 """)
 
-    # --- TABLE (KEPT FOR DETAIL) ---
+    # --- TABLE ---
     df = pd.DataFrame(options)
 
     if not df.empty:
