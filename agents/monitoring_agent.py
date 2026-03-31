@@ -21,7 +21,7 @@ def run_monitoring_agent(event_text):
     """
 
     response = client.messages.create(
-        model="claude-3-haiku-20240307",
+        model="model="claude-3-haiku-latest",
         max_tokens=300,
         messages=[
             {"role": "user", "content": prompt}
