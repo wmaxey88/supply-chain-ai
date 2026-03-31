@@ -28,4 +28,4 @@ def run_monitoring_agent(event_text):
         ]
     )
 
-    return response.content[0].text
+    return response.content[0].text 
