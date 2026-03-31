@@ -20,6 +20,12 @@ h2 { margin-top: 1.5rem; }
     border-radius: 10px;
 }
 div[data-testid="stMarkdownContainer"] p { margin-bottom: 0.5rem; }
+
+/* Clean divider line */
+.section-divider {
+    border-top: 1px solid #e5e7eb;
+    margin: 20px 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -48,7 +54,7 @@ event = st.text_input(
     value="Typhoon near Shanghai port causing shipment delays"
 )
 
-# --- HELPER: CLEAN + PARSE JSON ---
+# --- HELPER ---
 def safe_parse(text):
     try:
         cleaned = re.sub(r"```json|```", "", text).strip()
@@ -110,13 +116,11 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     delay_days = risk.get("estimated_delay_days", 0)
     risk_score = risk.get("risk_score", 0)
 
-    # --- FINANCIAL CALCS ---
     for opt in options:
         delay = opt.get("estimated_delay_days", 0)
         opt["delay_cost"] = delay * delay_cost_per_day
         opt["total_impact"] = opt.get("estimated_cost", 0) + opt["delay_cost"]
 
-    # --- DECISION LOGIC ---
     if options:
         if decision_strategy == "Minimize Cost Impact":
             best = min(options, key=lambda x: x["total_impact"])
@@ -133,9 +137,8 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     else:
         best = None
 
-    # --- EXECUTIVE SUMMARY (TITLE INSIDE CARD) ---
+    # --- EXECUTIVE SUMMARY ---
     if best:
-        st.markdown("<div style='padding:16px;border-radius:12px;background-color:#1f2937;margin-bottom:15px;'>", unsafe_allow_html=True)
         st.markdown("### Executive Summary")
         st.markdown(f"""
 **Situation:** {disruption_type.title()} disruption with **{severity.upper()} severity**
@@ -148,27 +151,20 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 
 **Confidence Level:** {confidence.title()}
 """)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
     # --- KEY METRICS ---
-    st.markdown("## Key Metrics")
+    st.markdown("### Key Metrics")
     col1, col2, col3 = st.columns(3)
     col1.metric("Risk Score", risk_score, "High" if risk_score > 70 else "Moderate")
     col2.metric("Estimated Delay", f"{delay_days} days")
     col3.metric("Confidence", confidence.title())
 
-    if risk_score > 70:
-        st.error("High Risk Disruption")
-    elif risk_score > 40:
-        st.warning("Moderate Risk Disruption")
-    else:
-        st.success("Low Risk Disruption")
-
     st.markdown(f"**Time to Impact:** Immediate (within {delay_days} days)")
+    st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
     # --- RECOMMENDED ACTION ---
     if best:
-        st.markdown("<div style='padding:16px;border-radius:12px;background-color:#052e16;margin-bottom:15px;'>", unsafe_allow_html=True)
         st.markdown("### Recommended Action")
         st.markdown(f"""
 **{best.get('option_name', 'N/A')}**
@@ -177,12 +173,10 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 - Delay: {best.get('estimated_delay_days', 0)} days
 - Total Impact: ${best.get('total_impact', 0):,}
 """)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
     # --- DECISION OPTIONS ---
-    st.markdown("<div style='padding:16px;border-radius:12px;background-color:#1f2937;margin-bottom:15px;'>", unsafe_allow_html=True)
     st.markdown("### Decision Options")
-
     for i, opt in enumerate(options):
         st.markdown(f"""
 **Option {i+1}: {opt.get('option_name', 'N/A')}**
@@ -191,18 +185,15 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 - Delay: {opt.get('estimated_delay_days', 0)} days
 - Total Impact: ${opt.get('total_impact', 0):,}
 """)
-
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
     # --- BUSINESS IMPACT ---
-    st.markdown("<div style='padding:16px;border-radius:12px;background-color:#1f2937;margin-bottom:15px;'>", unsafe_allow_html=True)
     st.markdown("### Business Impact")
     st.markdown(f"""
 - **Operational:** {monitoring.get('likely_impact', 'N/A')}
 - **Financial Exposure:** ~${delay_cost_per_day:,} per day of delay
 - **Customer Risk:** Potential downstream fulfillment disruption
 """)
-    st.markdown("</div>", unsafe_allow_html=True)
 
     # --- TABLE ---
     df = pd.DataFrame(options)
@@ -217,14 +208,12 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 
     # --- MANUAL OVERRIDE ---
     if options:
-        st.markdown("## Manual Override")
-
+        st.markdown("### Manual Override")
         names = [o["option_name"] for o in options]
         override = st.selectbox("Override decision:", ["No Override"] + names)
 
         if override != "No Override":
             selected = next(o for o in options if o["option_name"] == override)
-
             st.warning("Override Applied")
             st.write(f"**Option:** {selected['option_name']}")
             st.write(f"**Impact:** ${selected['total_impact']:,}")
