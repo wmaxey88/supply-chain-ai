@@ -7,23 +7,28 @@ from agents.monitoring_agent import run_monitoring_agent
 from agents.risk_agent import run_risk_agent
 from agents.scenario_agent import run_scenario_agent
 
+st.set_page_config(page_title="Supply Chain Disruption Manager", layout="wide")
+
 st.title("Supply Chain Disruption Manager")
 
 # --- SIDEBAR ---
-st.sidebar.header("Decision Controls")
+st.sidebar.header("Simulation Parameters")
 
+st.sidebar.subheader("Cost Assumptions")
 delay_cost_per_day = st.sidebar.slider(
     "Delay Cost per Day ($)",
     1000, 50000, 10000, 1000
 )
 
+st.sidebar.subheader("Decision Strategy")
 decision_strategy = st.sidebar.selectbox(
-    "Decision Strategy",
+    "Strategy",
     ["Minimize Cost Impact", "Minimize Delay", "Balanced"]
 )
 
-show_raw = st.sidebar.checkbox("Show Raw Agent Output", value=False)
+show_raw = st.sidebar.checkbox("Show Detailed Agent Output", value=False)
 
+# --- INPUT ---
 event = st.text_input(
     "Enter disruption event:",
     value="Typhoon near Shanghai port causing shipment delays"
@@ -59,7 +64,6 @@ if st.button("Run Simulation"):
             if not isinstance(options, list):
                 raise ValueError("Scenario agent output invalid")
 
-            # Save only if EVERYTHING worked
             st.session_state["run_data"] = {
                 "monitoring": monitoring,
                 "risk": risk,
@@ -77,7 +81,7 @@ if st.button("Run Simulation"):
     else:
         st.warning("Please enter an event.")
 
-# --- DISPLAY ONLY IF VALID ---
+# --- DISPLAY ---
 if "run_data" in st.session_state and st.session_state["run_data"]:
 
     data = st.session_state["run_data"]
@@ -86,31 +90,11 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     risk = data.get("risk", {})
     options = data.get("options", [])
 
-    # --- DISRUPTION OVERVIEW ---
-    st.subheader("Disruption Overview")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Type", monitoring.get("disruption_type", "N/A"))
-    col2.metric("Severity", monitoring.get("severity", "N/A"))
-    col3.metric("Confidence", risk.get("confidence", "N/A"))
-
-    st.write(f"**Impact:** {monitoring.get('likely_impact', 'N/A')}")
-
-    # --- RISK ---
-    st.subheader("Risk Assessment")
-
-    col1, col2 = st.columns(2)
-
-    col1.metric("Risk Score", risk.get("risk_score", "N/A"))
-    col2.metric("Delay", f"{risk.get('estimated_delay_days', 0)} days")
-
-    # --- RAW DEBUG ---
-    if show_raw:
-        st.subheader("Raw Outputs")
-        st.code(data["raw"]["monitoring"])
-        st.code(data["raw"]["risk"])
-        st.code(data["raw"]["scenario"])
+    disruption_type = monitoring.get("disruption_type", "N/A")
+    severity = monitoring.get("severity", "N/A")
+    confidence = risk.get("confidence", "N/A")
+    delay_days = risk.get("estimated_delay_days", 0)
+    risk_score = risk.get("risk_score", 0)
 
     # --- FINANCIAL CALCS ---
     for opt in options:
@@ -118,27 +102,12 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
         opt["delay_cost"] = delay * delay_cost_per_day
         opt["total_impact"] = opt.get("estimated_cost", 0) + opt["delay_cost"]
 
-    # --- TABLE ---
-    df = pd.DataFrame(options)
-
-    if not df.empty:
-        display_df = df.copy()
-
-        display_df["estimated_cost"] = display_df["estimated_cost"].map("${:,.0f}".format)
-        display_df["delay_cost"] = display_df["delay_cost"].map("${:,.0f}".format)
-        display_df["total_impact"] = display_df["total_impact"].map("${:,.0f}".format)
-
-        st.subheader("Response Options")
-        st.dataframe(display_df, use_container_width=True)
-
-    # --- DECISION ---
+    # --- DECISION LOGIC ---
     if options:
         if decision_strategy == "Minimize Cost Impact":
             best = min(options, key=lambda x: x["total_impact"])
-
         elif decision_strategy == "Minimize Delay":
             best = min(options, key=lambda x: x["estimated_delay_days"])
-
         else:
             best = min(
                 options,
@@ -147,29 +116,101 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
                     x["estimated_delay_days"] * 0.3 * delay_cost_per_day
                 )
             )
+    else:
+        best = None
 
-        st.subheader("Recommended Decision")
+    # --- EXECUTIVE SUMMARY ---
+    st.markdown("## Executive Summary")
 
-        col1, col2 = st.columns(2)
+    if best:
+        st.info(f"""
+**Situation:** {disruption_type.title()} disruption with **{severity.upper()} severity**
 
-        col1.write(f"**Option:** {best['option_name']}")
-        col1.write(f"**Impact:** ${best['total_impact']:,}")
-        col1.write(f"**Delay:** {best['estimated_delay_days']} days")
+**Expected Impact:** ~{delay_days} day delay
 
-        confidence = "High" if best["total_impact"] < 50000 else "Medium"
-        col2.metric("Confidence", confidence)
+**Recommended Action:** {best.get('option_name', 'N/A')}
 
-        # --- EXPLANATION ---
-        st.subheader("Rationale")
-        st.write(
-            f"Selected '{best['option_name']}' based on '{decision_strategy}' strategy."
-        )
+**Estimated Impact:** ${best.get('total_impact', 0):,}
 
-        # --- OVERRIDE ---
-        st.subheader("Manual Override")
+**Confidence Level:** {confidence.title()}
+""")
+
+    st.divider()
+
+    # --- KEY METRICS ---
+    st.markdown("## Key Metrics")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Risk Score", risk_score, "High" if risk_score > 70 else "Moderate")
+    col2.metric("Estimated Delay", f"{delay_days} days")
+    col3.metric("Confidence", confidence.title())
+
+    if risk_score > 70:
+        st.error("High Risk Disruption")
+    elif risk_score > 40:
+        st.warning("Moderate Risk Disruption")
+    else:
+        st.success("Low Risk Disruption")
+
+    st.markdown(f"**Time to Impact:** Immediate (within {delay_days} days)")
+
+    st.divider()
+
+    # --- RECOMMENDED ACTION ---
+    if best:
+        st.markdown("## Recommended Action")
+
+        st.success(f"""
+**{best.get('option_name', 'N/A')}**
+
+- Estimated Cost: ${best.get('estimated_cost', 0):,}
+- Delay: {best.get('estimated_delay_days', 0)} days
+- Total Impact: ${best.get('total_impact', 0):,}
+""")
+
+    st.divider()
+
+    # --- DECISION OPTIONS (SIMPLIFIED VIEW) ---
+    st.markdown("## Decision Options")
+
+    for i, opt in enumerate(options):
+        st.markdown(f"""
+**Option {i+1}: {opt.get('option_name', 'N/A')}**
+
+- Cost: ${opt.get('estimated_cost', 0):,}
+- Delay: {opt.get('estimated_delay_days', 0)} days
+- Total Impact: ${opt.get('total_impact', 0):,}
+""")
+
+    st.divider()
+
+    # --- BUSINESS IMPACT ---
+    st.markdown("## Business Impact")
+
+    st.write(f"""
+- **Operational:** {monitoring.get('likely_impact', 'N/A')}
+- **Financial Exposure:** ~${delay_cost_per_day:,} per day of delay
+- **Customer Risk:** Potential downstream fulfillment disruption
+""")
+
+    # --- TABLE (KEPT FOR DETAIL) ---
+    df = pd.DataFrame(options)
+
+    if not df.empty:
+        display_df = df.copy()
+        display_df["estimated_cost"] = display_df["estimated_cost"].map("${:,.0f}".format)
+        display_df["delay_cost"] = display_df["delay_cost"].map("${:,.0f}".format)
+        display_df["total_impact"] = display_df["total_impact"].map("${:,.0f}".format)
+
+        with st.expander("View Detailed Option Comparison"):
+            st.dataframe(display_df, use_container_width=True)
+
+    # --- MANUAL OVERRIDE ---
+    if options:
+        st.markdown("## Manual Override")
 
         names = [o["option_name"] for o in options]
-
         override = st.selectbox("Override decision:", ["No Override"] + names)
 
         if override != "No Override":
@@ -178,3 +219,10 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
             st.warning("Override Applied")
             st.write(f"**Option:** {selected['option_name']}")
             st.write(f"**Impact:** ${selected['total_impact']:,}")
+
+    # --- RAW OUTPUTS ---
+    if show_raw:
+        with st.expander("View Detailed Agent Output"):
+            st.code(data["raw"]["monitoring"])
+            st.code(data["raw"]["risk"])
+            st.code(data["raw"]["scenario"])
