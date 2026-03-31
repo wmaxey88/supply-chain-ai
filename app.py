@@ -19,7 +19,6 @@ h2 { margin-top: 1.5rem; }
     padding: 15px;
     border-radius: 10px;
 }
-/* tighten paragraph spacing inside markdown */
 div[data-testid="stMarkdownContainer"] p { margin-bottom: 0.5rem; }
 </style>
 """, unsafe_allow_html=True)
@@ -134,10 +133,10 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     else:
         best = None
 
-    # --- EXECUTIVE SUMMARY (FIXED CARD RENDERING) ---
-    st.markdown("## Executive Summary")
+    # --- EXECUTIVE SUMMARY (TITLE INSIDE CARD) ---
     if best:
-        st.markdown("<div style='padding:20px;border-radius:12px;background-color:#1f2937;margin-bottom:15px;'>", unsafe_allow_html=True)
+        st.markdown("<div style='padding:16px;border-radius:12px;background-color:#1f2937;margin-bottom:15px;'>", unsafe_allow_html=True)
+        st.markdown("### Executive Summary")
         st.markdown(f"""
 **Situation:** {disruption_type.title()} disruption with **{severity.upper()} severity**
 
@@ -150,8 +149,6 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 **Confidence Level:** {confidence.title()}
 """)
         st.markdown("</div>", unsafe_allow_html=True)
-
-    st.divider()
 
     # --- KEY METRICS ---
     st.markdown("## Key Metrics")
@@ -169,12 +166,10 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 
     st.markdown(f"**Time to Impact:** Immediate (within {delay_days} days)")
 
-    st.divider()
-
-    # --- RECOMMENDED ACTION (FIXED CARD) ---
+    # --- RECOMMENDED ACTION ---
     if best:
-        st.markdown("## Recommended Action")
-        st.markdown("<div style='padding:18px;border-radius:12px;background-color:#052e16;margin-bottom:15px;'>", unsafe_allow_html=True)
+        st.markdown("<div style='padding:16px;border-radius:12px;background-color:#052e16;margin-bottom:15px;'>", unsafe_allow_html=True)
+        st.markdown("### Recommended Action")
         st.markdown(f"""
 **{best.get('option_name', 'N/A')}**
 
@@ -184,12 +179,11 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 """)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.divider()
+    # --- DECISION OPTIONS ---
+    st.markdown("<div style='padding:16px;border-radius:12px;background-color:#1f2937;margin-bottom:15px;'>", unsafe_allow_html=True)
+    st.markdown("### Decision Options")
 
-    # --- DECISION OPTIONS (FIXED CARDS) ---
-    st.markdown("## Decision Options")
     for i, opt in enumerate(options):
-        st.markdown("<div style='padding:15px;border-radius:10px;background-color:#111827;margin-bottom:10px;'>", unsafe_allow_html=True)
         st.markdown(f"""
 **Option {i+1}: {opt.get('option_name', 'N/A')}**
 
@@ -197,35 +191,40 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 - Delay: {opt.get('estimated_delay_days', 0)} days
 - Total Impact: ${opt.get('total_impact', 0):,}
 """)
-        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.divider()
+    st.markdown("</div>", unsafe_allow_html=True)
 
     # --- BUSINESS IMPACT ---
-    st.markdown("## Business Impact")
-    st.write(f"""
+    st.markdown("<div style='padding:16px;border-radius:12px;background-color:#1f2937;margin-bottom:15px;'>", unsafe_allow_html=True)
+    st.markdown("### Business Impact")
+    st.markdown(f"""
 - **Operational:** {monitoring.get('likely_impact', 'N/A')}
 - **Financial Exposure:** ~${delay_cost_per_day:,} per day of delay
 - **Customer Risk:** Potential downstream fulfillment disruption
 """)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # --- TABLE (DETAIL IN EXPANDER) ---
+    # --- TABLE ---
     df = pd.DataFrame(options)
     if not df.empty:
         display_df = df.copy()
         display_df["estimated_cost"] = display_df["estimated_cost"].map("${:,.0f}".format)
         display_df["delay_cost"] = display_df["delay_cost"].map("${:,.0f}".format)
         display_df["total_impact"] = display_df["total_impact"].map("${:,.0f}".format)
+
         with st.expander("View Detailed Option Comparison"):
             st.dataframe(display_df, use_container_width=True)
 
     # --- MANUAL OVERRIDE ---
     if options:
         st.markdown("## Manual Override")
+
         names = [o["option_name"] for o in options]
         override = st.selectbox("Override decision:", ["No Override"] + names)
+
         if override != "No Override":
             selected = next(o for o in options if o["option_name"] == override)
+
             st.warning("Override Applied")
             st.write(f"**Option:** {selected['option_name']}")
             st.write(f"**Impact:** ${selected['total_impact']:,}")
