@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import re
 
 from agents.monitoring_agent import run_monitoring_agent
 from agents.risk_agent import run_risk_agent
@@ -25,23 +26,39 @@ if st.button("Run Simulation"):
         scenario_result = run_scenario_agent(monitoring_result, risk_result)
         st.subheader("Scenario Options")
         st.code(scenario_result, language="json")
+        st.caption("Raw model output (pre-parsing)")
 
         # Step 4: Decision Logic
         try:
-            options = json.loads(scenario_result)
+            cleaned = scenario_result.strip()
 
-            # Simple decision rule:
-            # minimize (cost + delay * 10000)
+            # Remove markdown if present
+            cleaned = re.sub(r"```json|```", "", cleaned).strip()
+
+            options = json.loads(cleaned)
+
+            # Ensure it's a list
+            if not isinstance(options, list):
+                raise ValueError("Scenario output is not a list")
+
+            st.subheader("Scenario Options Table")
+            st.table(options)
+
             best_option = min(
                 options,
-                key=lambda x: x["estimated_cost"] + (x["estimated_delay_days"] * 10000)
+                key=lambda x: x.get("estimated_cost", 999999) +
+                              (x.get("estimated_delay_days", 999) * 10000)
             )
 
             st.subheader("Recommended Decision")
-            st.success(best_option)
+            st.write(f"**Option:** {best_option.get('option_name', 'N/A')}")
+            st.write(f"**Description:** {best_option.get('description', 'N/A')}")
+            st.write(f"**Cost:** ${best_option.get('estimated_cost', 0):,}")
+            st.write(f"**Delay:** {best_option.get('estimated_delay_days', 0)} days")
 
         except Exception as e:
             st.error(f"Decision logic failed: {e}")
+            st.write("Raw output:", scenario_result)
 
     else:
         st.warning("Please enter an event.")
