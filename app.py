@@ -25,33 +25,44 @@ decision_strategy = st.sidebar.selectbox(
     ["Minimize Cost Impact", "Minimize Delay", "Balanced"]
 )
 
-event = st.text_input("Enter disruption event:")
+show_raw = st.sidebar.checkbox("Show Raw Agent Output (Debug)", value=False)
 
-# --- RUN SIMULATION BUTTON ---
+event = st.text_input(
+    "Enter disruption event:",
+    value="Typhoon near Shanghai port causing shipment delays"
+)
+
+# --- RUN SIMULATION ---
 if st.button("Run Simulation"):
     if event:
         try:
             st.session_state["run_data"] = {}
 
-            # Step 1: Monitoring
+            # Monitoring
             monitoring_result = run_monitoring_agent(event)
-            st.session_state["run_data"]["monitoring"] = monitoring_result
+            monitoring_clean = json.loads(monitoring_result)
 
-            # Step 2: Risk
+            # Risk
             risk_result = run_risk_agent(monitoring_result)
-            st.session_state["run_data"]["risk"] = risk_result
+            risk_clean = json.loads(risk_result)
 
-            # Step 3: Scenario
+            # Scenario
             scenario_result = run_scenario_agent(monitoring_result, risk_result)
-            st.session_state["run_data"]["scenario_raw"] = scenario_result
-
             cleaned = re.sub(r"```json|```", "", scenario_result).strip()
             options = json.loads(cleaned)
 
             if not isinstance(options, list):
                 raise ValueError("Scenario output is not a list")
 
-            st.session_state["run_data"]["options"] = options
+            # Store everything
+            st.session_state["run_data"] = {
+                "monitoring": monitoring_clean,
+                "risk": risk_clean,
+                "options": options,
+                "raw_monitoring": monitoring_result,
+                "raw_risk": risk_result,
+                "raw_scenario": scenario_result
+            }
 
         except Exception as e:
             st.error(f"Pipeline failed: {e}")
@@ -59,21 +70,48 @@ if st.button("Run Simulation"):
     else:
         st.warning("Please enter an event.")
 
-# --- DISPLAY RESULTS (PERSISTENT) ---
+# --- DISPLAY RESULTS ---
 if "run_data" in st.session_state:
 
     data = st.session_state["run_data"]
 
-    monitoring_result = data["monitoring"]
-    risk_result = data["risk"]
+    monitoring = data["monitoring"]
+    risk = data["risk"]
     options = data["options"]
 
-    # --- SHOW RAW AGENT OUTPUTS ---
-    st.subheader("Monitoring Agent Output")
-    st.code(monitoring_result, language="json")
+    # --- CLEAN MONITORING DISPLAY ---
+    st.subheader("Disruption Overview")
 
-    st.subheader("Risk Agent Output")
-    st.code(risk_result, language="json")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Disruption Type", monitoring.get("disruption_type", "N/A"))
+
+    with col2:
+        st.metric("Severity", monitoring.get("severity", "N/A"))
+
+    with col3:
+        st.metric("Confidence", risk.get("confidence", "N/A"))
+
+    st.write(f"**Impact Summary:** {monitoring.get('likely_impact', 'N/A')}")
+
+    # --- CLEAN RISK DISPLAY ---
+    st.subheader("Risk Assessment")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric("Risk Score", risk.get("risk_score", "N/A"))
+
+    with col2:
+        st.metric("Estimated Delay", f"{risk.get('estimated_delay_days', 0)} days")
+
+    # --- OPTIONAL RAW OUTPUT ---
+    if show_raw:
+        st.subheader("Raw Agent Outputs")
+        st.code(data["raw_monitoring"], language="json")
+        st.code(data["raw_risk"], language="json")
+        st.code(data["raw_scenario"], language="json")
 
     # --- APPLY FINANCIAL CALCULATIONS ---
     for opt in options:
@@ -81,7 +119,7 @@ if "run_data" in st.session_state:
         opt["delay_cost"] = delay_days * delay_cost_per_day
         opt["total_impact"] = opt.get("estimated_cost", 0) + opt["delay_cost"]
 
-    # --- CLEAN TABLE DISPLAY ---
+    # --- TABLE DISPLAY ---
     df = pd.DataFrame(options)
 
     display_df = df.copy()
@@ -89,7 +127,7 @@ if "run_data" in st.session_state:
     display_df["delay_cost"] = display_df["delay_cost"].map("${:,.0f}".format)
     display_df["total_impact"] = display_df["total_impact"].map("${:,.0f}".format)
 
-    st.subheader("Scenario + Financial Comparison")
+    st.subheader("Response Options Comparison")
     st.dataframe(display_df, use_container_width=True)
 
     # --- DECISION LOGIC ---
@@ -99,7 +137,7 @@ if "run_data" in st.session_state:
     elif decision_strategy == "Minimize Delay":
         best_option = min(options, key=lambda x: x["estimated_delay_days"])
 
-    else:  # Balanced
+    else:
         best_option = min(
             options,
             key=lambda x: (
@@ -108,7 +146,7 @@ if "run_data" in st.session_state:
             )
         )
 
-    # --- DISPLAY DECISION ---
+    # --- DECISION DISPLAY ---
     st.subheader("Recommended Decision")
 
     col1, col2 = st.columns(2)
@@ -125,8 +163,8 @@ if "run_data" in st.session_state:
     # --- EXPLANATION ---
     st.subheader("Decision Rationale")
     st.write(
-        f"The system selected '{best_option['option_name']}' because it best satisfies the "
-        f"'{decision_strategy}' strategy while minimizing financial and operational impact."
+        f"The system selected '{best_option['option_name']}' based on the '{decision_strategy}' strategy, "
+        f"optimizing financial and operational trade-offs."
     )
 
     # --- MANUAL OVERRIDE ---
