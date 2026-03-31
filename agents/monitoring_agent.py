@@ -19,7 +19,7 @@ Event:
 """
 
     response = client.messages.create(
-        model="claude-3-haiku-latest",
+        model="claude-4-5-haiku-latest",
         max_tokens=300,
         messages=[
             {
