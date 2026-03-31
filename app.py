@@ -12,18 +12,15 @@ st.set_page_config(page_title="Supply Chain Disruption Manager", layout="wide")
 # --- GLOBAL STYLING ---
 st.markdown("""
 <style>
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-}
-h2 {
-    margin-top: 1.5rem;
-}
+.block-container { padding-top: 2rem; padding-bottom: 2rem; }
+h2 { margin-top: 1.5rem; }
 [data-testid="stMetric"] {
     background-color: #111827;
     padding: 15px;
     border-radius: 10px;
 }
+/* tighten paragraph spacing inside markdown */
+div[data-testid="stMarkdownContainer"] p { margin-bottom: 0.5rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -137,19 +134,18 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     else:
         best = None
 
-    # --- EXECUTIVE SUMMARY ---
+    # --- EXECUTIVE SUMMARY (FIXED CARD RENDERING) ---
     st.markdown("## Executive Summary")
-
     if best:
-        st.markdown("<div style='padding:20px;border-radius:12px;background-color:#1f2937;'>", unsafe_allow_html=True)
+        st.markdown("<div style='padding:20px;border-radius:12px;background-color:#1f2937;margin-bottom:15px;'>", unsafe_allow_html=True)
         st.markdown(f"""
-**Situation:** {disruption_type.title()} disruption with **{severity.upper()} severity**  
+**Situation:** {disruption_type.title()} disruption with **{severity.upper()} severity**
 
-**Expected Impact:** ~{delay_days} day delay  
+**Expected Impact:** ~{delay_days} day delay
 
-**Recommended Action:** {best.get('option_name', 'N/A')}  
+**Recommended Action:** {best.get('option_name', 'N/A')}
 
-**Estimated Impact:** ${best.get('total_impact', 0):,}  
+**Estimated Impact:** ${best.get('total_impact', 0):,}
 
 **Confidence Level:** {confidence.title()}
 """)
@@ -159,9 +155,7 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 
     # --- KEY METRICS ---
     st.markdown("## Key Metrics")
-
     col1, col2, col3 = st.columns(3)
-
     col1.metric("Risk Score", risk_score, "High" if risk_score > 70 else "Moderate")
     col2.metric("Estimated Delay", f"{delay_days} days")
     col3.metric("Confidence", confidence.title())
@@ -177,32 +171,30 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 
     st.divider()
 
-    # --- RECOMMENDED ACTION ---
+    # --- RECOMMENDED ACTION (FIXED CARD) ---
     if best:
         st.markdown("## Recommended Action")
-
-        st.markdown("<div style='padding:18px;border-radius:12px;background-color:#052e16;'>", unsafe_allow_html=True)
+        st.markdown("<div style='padding:18px;border-radius:12px;background-color:#052e16;margin-bottom:15px;'>", unsafe_allow_html=True)
         st.markdown(f"""
-**{best.get('option_name', 'N/A')}**  
+**{best.get('option_name', 'N/A')}**
 
-- Estimated Cost: ${best.get('estimated_cost', 0):,}  
-- Delay: {best.get('estimated_delay_days', 0)} days  
+- Estimated Cost: ${best.get('estimated_cost', 0):,}
+- Delay: {best.get('estimated_delay_days', 0)} days
 - Total Impact: ${best.get('total_impact', 0):,}
 """)
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
 
-    # --- DECISION OPTIONS ---
+    # --- DECISION OPTIONS (FIXED CARDS) ---
     st.markdown("## Decision Options")
-
     for i, opt in enumerate(options):
         st.markdown("<div style='padding:15px;border-radius:10px;background-color:#111827;margin-bottom:10px;'>", unsafe_allow_html=True)
         st.markdown(f"""
-**Option {i+1}: {opt.get('option_name', 'N/A')}**  
+**Option {i+1}: {opt.get('option_name', 'N/A')}**
 
-- Cost: ${opt.get('estimated_cost', 0):,}  
-- Delay: {opt.get('estimated_delay_days', 0)} days  
+- Cost: ${opt.get('estimated_cost', 0):,}
+- Delay: {opt.get('estimated_delay_days', 0)} days
 - Total Impact: ${opt.get('total_impact', 0):,}
 """)
         st.markdown("</div>", unsafe_allow_html=True)
@@ -211,35 +203,29 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 
     # --- BUSINESS IMPACT ---
     st.markdown("## Business Impact")
-
     st.write(f"""
 - **Operational:** {monitoring.get('likely_impact', 'N/A')}
 - **Financial Exposure:** ~${delay_cost_per_day:,} per day of delay
 - **Customer Risk:** Potential downstream fulfillment disruption
 """)
 
-    # --- TABLE ---
+    # --- TABLE (DETAIL IN EXPANDER) ---
     df = pd.DataFrame(options)
-
     if not df.empty:
         display_df = df.copy()
         display_df["estimated_cost"] = display_df["estimated_cost"].map("${:,.0f}".format)
         display_df["delay_cost"] = display_df["delay_cost"].map("${:,.0f}".format)
         display_df["total_impact"] = display_df["total_impact"].map("${:,.0f}".format)
-
         with st.expander("View Detailed Option Comparison"):
             st.dataframe(display_df, use_container_width=True)
 
     # --- MANUAL OVERRIDE ---
     if options:
         st.markdown("## Manual Override")
-
         names = [o["option_name"] for o in options]
         override = st.selectbox("Override decision:", ["No Override"] + names)
-
         if override != "No Override":
             selected = next(o for o in options if o["option_name"] == override)
-
             st.warning("Override Applied")
             st.write(f"**Option:** {selected['option_name']}")
             st.write(f"**Impact:** ${selected['total_impact']:,}")
