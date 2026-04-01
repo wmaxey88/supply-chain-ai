@@ -92,7 +92,6 @@ Context: Supply chain disruption. Consider logistics delays, cost impact, and do
                 risk_raw = run_risk_agent(monitoring_raw)
                 risk = safe_parse(risk_raw)
 
-            # consistency correction
             if not validate_consistency(monitoring, risk):
                 retried = True
                 risk_raw = run_risk_agent(monitoring_raw + "\nEnsure risk aligns with severity.")
@@ -102,7 +101,6 @@ Context: Supply chain disruption. Consider logistics delays, cost impact, and do
                 scenario_raw = run_scenario_agent(monitoring_raw, risk_raw)
                 options = safe_parse(scenario_raw)
 
-            # self-correct
             if not validate_options(options):
                 retried = True
                 scenario_raw = correct_scenario(monitoring_raw, risk_raw, scenario_raw)
@@ -147,7 +145,7 @@ if "run_data" in st.session_state:
 
     best = min(options, key=lambda x: x["total_impact"])
 
-    # summary
+    # --- EXECUTIVE SUMMARY ---
     st.markdown("### Executive Summary")
     st.write(f"""
 - **Situation:** {monitoring.get("disruption_type")} ({monitoring.get("severity")})
@@ -158,7 +156,7 @@ if "run_data" in st.session_state:
 
     st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
-    # options
+    # --- DECISION OPTIONS ---
     st.markdown("### Decision Options")
     for opt in options:
         st.write(f"""
@@ -168,8 +166,47 @@ if "run_data" in st.session_state:
 - Total Impact: ${opt['total_impact']:,}
 """)
 
+    st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
+
+    # --- MANUAL OVERRIDE (FIXED) ---
+    st.markdown("### Manual Override")
+
+    option_names = [o["option_name"] for o in options]
+    override = st.selectbox("Override decision:", ["No Override"] + option_names)
+
+    if override != "No Override":
+        selected = next(o for o in options if o["option_name"] == override)
+
+        st.warning("Override Applied")
+        st.write(f"""
+**{selected['option_name']}**
+- Cost: ${selected['estimated_cost']:,}
+- Delay: {selected['estimated_delay_days']} days
+- Total Impact: ${selected['total_impact']:,}
+""")
+
     if data["retried"]:
         st.caption("Auto-corrected by validation layer")
 
+    st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
+
+    # --- RAW OUTPUTS ---
     if show_raw:
-        st.json(data["raw"])
+        st.markdown("### Detailed Agent Output")
+
+        st.markdown("**Monitoring Agent Output**")
+        parsed = safe_parse(data["raw"]["monitoring"])
+        st.json(parsed) if parsed else st.code(data["raw"]["monitoring"])
+
+        st.markdown("**Risk Agent Output**")
+        parsed = safe_parse(data["raw"]["risk"])
+        st.json(parsed) if parsed else st.code(data["raw"]["risk"])
+
+        st.markdown("**Scenario Agent Output**")
+        parsed = safe_parse(data["raw"]["scenario"])
+        if isinstance(parsed, list):
+            for i, item in enumerate(parsed):
+                st.markdown(f"Option {i+1}")
+                st.json(item)
+        else:
+            st.json(parsed) if parsed else st.code(data["raw"]["scenario"])
