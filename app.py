@@ -20,12 +20,7 @@ h2 { margin-top: 1.5rem; }
     border-radius: 10px;
 }
 div[data-testid="stMarkdownContainer"] p { margin-bottom: 0.5rem; }
-
-/* Clean divider line */
-.section-divider {
-    border-top: 1px solid #e5e7eb;
-    margin: 20px 0;
-}
+.section-divider { border-top: 1px solid #374151; margin: 20px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -54,7 +49,7 @@ event = st.text_input(
     value="Typhoon near Shanghai port causing shipment delays"
 )
 
-# --- HELPER ---
+# --- HELPERS ---
 def safe_parse(text):
     try:
         cleaned = re.sub(r"```json|```", "", text).strip()
@@ -62,11 +57,47 @@ def safe_parse(text):
     except:
         return None
 
+# --- VALIDATION ---
+def validate_options(options):
+    if not isinstance(options, list):
+        return False
+
+    required_fields = ["option_name", "estimated_cost", "estimated_delay_days"]
+
+    for opt in options:
+        for field in required_fields:
+            if field not in opt:
+                return False
+
+    return True
+
+# --- SELF CORRECTION ---
+def correct_scenario_output(monitoring_raw, risk_raw, bad_output):
+    correction_prompt = f"""
+The previous output was invalid or malformed.
+
+Original output:
+{bad_output}
+
+Fix the output so that:
+- It is valid JSON
+- It is a LIST of objects
+- Each object includes:
+  - option_name
+  - estimated_cost
+  - estimated_delay_days
+
+Return ONLY valid JSON. No explanation.
+"""
+
+    return run_scenario_agent(monitoring_raw, risk_raw + correction_prompt)
+
 # --- RUN PIPELINE ---
 if st.button("Run Simulation"):
     if event:
         try:
-            # --- SPINNER WITH STAGES ---
+            retried = False
+
             with st.spinner("Monitoring disruption signals..."):
                 monitoring_raw = run_monitoring_agent(event)
                 monitoring = safe_parse(monitoring_raw)
@@ -85,13 +116,22 @@ if st.button("Run Simulation"):
                 scenario_raw = run_scenario_agent(monitoring_raw, risk_raw)
                 options = safe_parse(scenario_raw)
 
-                if not isinstance(options, list):
-                    raise ValueError("Scenario agent output invalid")
+            # --- VALIDATE + AUTO-CORRECT ---
+            if not validate_options(options):
+                retried = True
+
+                with st.spinner("Correcting scenario output..."):
+                    scenario_raw = correct_scenario_output(monitoring_raw, risk_raw, scenario_raw)
+                    options = safe_parse(scenario_raw)
+
+            if not validate_options(options):
+                raise ValueError("Scenario agent failed validation after retry")
 
             st.session_state["run_data"] = {
                 "monitoring": monitoring,
                 "risk": risk,
                 "options": options,
+                "retried": retried,
                 "raw": {
                     "monitoring": monitoring_raw,
                     "risk": risk_raw,
@@ -120,24 +160,20 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     delay_days = risk.get("estimated_delay_days", 0)
     risk_score = risk.get("risk_score", 0)
 
+    # --- FINANCIAL CALCS ---
     for opt in options:
         delay = opt.get("estimated_delay_days", 0)
         opt["delay_cost"] = delay * delay_cost_per_day
         opt["total_impact"] = opt.get("estimated_cost", 0) + opt["delay_cost"]
 
+    # --- DECISION ---
     if options:
         if decision_strategy == "Minimize Cost Impact":
             best = min(options, key=lambda x: x["total_impact"])
         elif decision_strategy == "Minimize Delay":
             best = min(options, key=lambda x: x["estimated_delay_days"])
         else:
-            best = min(
-                options,
-                key=lambda x: (
-                    x["total_impact"] * 0.7 +
-                    x["estimated_delay_days"] * 0.3 * delay_cost_per_day
-                )
-            )
+            best = min(options, key=lambda x: (x["total_impact"] * 0.7 + x["estimated_delay_days"] * 0.3 * delay_cost_per_day))
     else:
         best = None
 
@@ -157,7 +193,7 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 """)
         st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
-    # --- KEY METRICS ---
+    # --- METRICS ---
     st.markdown("### Key Metrics")
     col1, col2, col3 = st.columns(3)
     col1.metric("Risk Score", risk_score, "High" if risk_score > 70 else "Moderate")
@@ -167,7 +203,7 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
     st.markdown(f"**Time to Impact:** Immediate (within {delay_days} days)")
     st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
-    # --- RECOMMENDED ACTION ---
+    # --- RECOMMENDED ---
     if best:
         st.markdown("### Recommended Action")
         st.markdown(f"""
@@ -179,7 +215,7 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
 """)
         st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
 
-    # --- DECISION OPTIONS ---
+    # --- OPTIONS ---
     st.markdown("### Decision Options")
     for i, opt in enumerate(options):
         st.markdown(f"""
@@ -210,44 +246,27 @@ if "run_data" in st.session_state and st.session_state["run_data"]:
         with st.expander("View Detailed Option Comparison"):
             st.dataframe(display_df, use_container_width=True)
 
-    # --- MANUAL OVERRIDE ---
-    if options:
-        st.markdown("### Manual Override")
-        names = [o["option_name"] for o in options]
-        override = st.selectbox("Override decision:", ["No Override"] + names)
+    # --- RETRY INDICATOR ---
+    if data.get("retried"):
+        st.caption("Output auto-corrected by validation layer")
 
-        if override != "No Override":
-            selected = next(o for o in options if o["option_name"] == override)
-            st.warning("Override Applied")
-            st.write(f"**Option:** {selected['option_name']}")
-            st.write(f"**Impact:** ${selected['total_impact']:,}")
-
-            # --- RAW OUTPUTS ---
+    # --- RAW OUTPUTS ---
     if show_raw:
         st.markdown("### Detailed Agent Output")
 
         st.markdown("**Monitoring Agent Output**")
-        monitoring_parsed = safe_parse(data["raw"]["monitoring"])
-        if monitoring_parsed:
-            st.json(monitoring_parsed)
-        else:
-            st.code(data["raw"]["monitoring"])
+        parsed = safe_parse(data["raw"]["monitoring"])
+        st.json(parsed) if parsed else st.code(data["raw"]["monitoring"])
 
         st.markdown("**Risk Agent Output**")
-        risk_parsed = safe_parse(data["raw"]["risk"])
-        if risk_parsed:
-            st.json(risk_parsed)
-        else:
-            st.code(data["raw"]["risk"])
+        parsed = safe_parse(data["raw"]["risk"])
+        st.json(parsed) if parsed else st.code(data["raw"]["risk"])
 
         st.markdown("**Scenario Agent Output**")
-        scenario_parsed = safe_parse(data["raw"]["scenario"])
-
-        if isinstance(scenario_parsed, list):
-            for i, item in enumerate(scenario_parsed):
+        parsed = safe_parse(data["raw"]["scenario"])
+        if isinstance(parsed, list):
+            for i, item in enumerate(parsed):
                 st.markdown(f"Option {i+1}")
                 st.json(item)
-        elif scenario_parsed:
-            st.json(scenario_parsed)
         else:
-            st.code(data["raw"]["scenario"])
+            st.json(parsed) if parsed else st.code(data["raw"]["scenario"])
