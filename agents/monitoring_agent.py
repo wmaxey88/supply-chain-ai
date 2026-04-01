@@ -1,35 +1,13 @@
-import os
-import anthropic
-
-client = anthropic.Anthropic(
-    api_key=os.getenv("ANTHROPIC_API_KEY")
-)
-
-def run_monitoring_agent(event_text):
+def run_monitoring_agent(event):
     prompt = f"""
-You are a supply chain monitoring agent.
+Analyze disruption.
 
-Analyze the following event and return STRICT JSON with EXACTLY these fields:
-
-- disruption_type (string)
-- severity (low, medium, high)
-- likely_impact (one sentence only)
-
-Do not include any additional fields or nested structures.
-
-Event:
-{event_text}
+Return JSON:
+{{
+  "disruption_type": "...",
+  "severity": "low|medium|high",
+  "likely_impact": "short description"
+}}
 """
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=300,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
-
-    return response.content[0].text
+    return call_model(prompt)
