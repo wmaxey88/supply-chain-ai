@@ -12,4 +12,4 @@ Ensure alignment:
 - high severity → high risk
 """
 
-    return call_model(prompt)
+    return response.content[0].text
