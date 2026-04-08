@@ -1,31 +1,38 @@
-from anthropic import Anthropic
 import os
+import anthropic
 
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+client = anthropic.Anthropic(
+    api_key=os.getenv("ANTHROPIC_API_KEY")
+)
 
-def run_scenario_agent(monitoring_input, risk_input):
+def run_scenario_agent(monitoring_output, risk_output):
     prompt = f"""
-Generate 3 supply chain response options.
+You are a supply chain scenario planning agent.
 
-Each must represent:
-1. Lowest cost
-2. Fastest resolution
-3. Balanced tradeoff
+Based on the disruption and risk data below, generate EXACTLY 3 response options.
 
-Return ONLY JSON list:
-[
-  {{
-    "option_name": "...",
-    "estimated_cost": number,
-    "estimated_delay_days": number
-  }}
-]
+Return STRICT JSON as a list of objects with:
+- option_name
+- description
+- estimated_cost (integer USD)
+- estimated_delay_days (integer)
+
+Disruption:
+{monitoring_output}
+
+Risk:
+{risk_output}
 """
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=800,
-        messages=[{"role": "user", "content": prompt}]
+        max_tokens=400,
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
     )
 
     return response.content[0].text
